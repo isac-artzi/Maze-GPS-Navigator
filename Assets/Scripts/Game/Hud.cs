@@ -11,7 +11,7 @@ namespace MazeNav
         MazeGame game;
         Text subtitle, instruction, distance, timer, status, finishText;
         Image arrow, subtitleBg;
-        GameObject finishPanel;
+        GameObject finishPanel, gpsCard, statusPanel, helpPanel;
         float subtitleUntil;
 
         public void Init(MazeGame g, CameraRig rig, bool vr)
@@ -37,6 +37,7 @@ namespace MazeNav
             var card = vr
                 ? UIFactory.Panel("GPS", root, new Color(0.08f, 0.1f, 0.15f, 0.85f), new Vector2(0.2f, 0.3f), new Vector2(0.8f, 0.76f))
                 : UIFactory.Panel("GPS", root, new Color(0.08f, 0.1f, 0.15f, 0.85f), new Vector2(0, 1), new Vector2(0, 1), new Vector2(20, -230), new Vector2(430, -20));
+            gpsCard = card.gameObject;
             var arrowRt = UIFactory.Rect("Arrow", card.transform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(15, -70), new Vector2(155, 70));
             arrow = arrowRt.gameObject.AddComponent<Image>();
             arrow.sprite = UIFactory.ArrowSprite();
@@ -50,9 +51,11 @@ namespace MazeNav
             if (!vr)
             {
                 var statusBg = UIFactory.Panel("Status", root, new Color(0.08f, 0.1f, 0.15f, 0.85f), new Vector2(1, 1), new Vector2(1, 1), new Vector2(-380, -140), new Vector2(-20, -20));
+                statusPanel = statusBg.gameObject;
                 status = UIFactory.Label("Status", statusBg.transform, "", 24, Color.white, TextAnchor.MiddleLeft);
                 status.rectTransform.offsetMin = new Vector2(16, 0);
                 var helpBg = UIFactory.Panel("Help", root, new Color(0, 0, 0, 0.5f), new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 0), new Vector2(0, 44));
+                helpPanel = helpBg.gameObject;
                 UIFactory.Label("Help", helpBg.transform,
                     "↑ ↓ walk    ← → turn    V bird's-eye    P path    R repeat    G voice    T autopilot    Esc menu", 22, new Color(0.85f, 0.9f, 1f));
             }
@@ -84,11 +87,20 @@ namespace MazeNav
             subtitleUntil = Time.time + 4f;
         }
 
-        public void ShowFinish(float seconds, int recalcs)
+        /// Hide the maze HUD (GPS card, status, help) while the cube challenge is on screen. Subtitles stay.
+        public void SetPuzzleMode(bool on)
+        {
+            gpsCard.SetActive(!on);
+            if (statusPanel != null) statusPanel.SetActive(!on);
+            if (helpPanel != null) helpPanel.SetActive(!on);
+        }
+
+        public void ShowFinish(float seconds, int recalcs, int cubeAttempts, float cubeSeconds)
         {
             finishPanel.SetActive(true);
             string again = GameSettings.Mode == RunMode.VR ? "A = new maze    Menu button = main menu" : "Enter = new maze    Esc = main menu";
-            finishText.text = $"You escaped!\nTime {Format(seconds)}   ·   {recalcs} recalculation{(recalcs == 1 ? "" : "s")}\n\n<size=26>{again}</size>";
+            finishText.text = $"You escaped!\nTime {Format(seconds)}   ·   {recalcs} recalculation{(recalcs == 1 ? "" : "s")}\n" +
+                              $"<size=28>Cube solved in {Format(cubeSeconds)} on attempt {cubeAttempts}</size>\n\n<size=26>{again}</size>";
         }
 
         static string Format(float s) => $"{(int)s / 60}:{(int)s % 60:00}";

@@ -17,9 +17,9 @@ namespace MazeNav
         static readonly int[] Sizes = { 8, 10, 14, 18 };
 
         CameraRig rig;
-        Text status, sizeLabel;
+        Text status, sizeLabel, cubeLabel;
         bool vr, starting;
-        readonly ButtonEdge aEdge = new ButtonEdge(), trigEdge = new ButtonEdge(), stickEdge = new ButtonEdge();
+        readonly ButtonEdge aEdge = new ButtonEdge(), trigEdge = new ButtonEdge(), stickEdge = new ButtonEdge(), cubeStickEdge = new ButtonEdge();
 
         void Start()
         {
@@ -47,15 +47,18 @@ namespace MazeNav
             Transform c = card.transform;
 
             Place(UIFactory.Label("Title", c, "MAZE NAVIGATOR", 76, new Color(1f, 0.82f, 0.3f), TextAnchor.MiddleCenter, FontStyle.Bold), 0.80f, 0.95f);
-            Place(UIFactory.Label("Subtitle", c, "Escape a procedurally generated maze.\nA* pathfinding + GPS-style voice guidance.", 30, new Color(0.85f, 0.9f, 1f)), 0.64f, 0.80f);
+            Place(UIFactory.Label("Subtitle", c, "Escape a procedurally generated maze with A* + GPS voice guidance.\nThe exit is locked: solve a 2×2×2 cube in 2 minutes or start over!", 30, new Color(0.85f, 0.9f, 1f)), 0.64f, 0.80f);
 
-            var sizeBtn = UIFactory.Button("Size", c, "", new Color(0.25f, 0.3f, 0.4f), new Vector2(0.3f, 0.50f), new Vector2(0.7f, 0.60f), CycleSize, 28);
+            var sizeBtn = UIFactory.Button("Size", c, "", new Color(0.25f, 0.3f, 0.4f), new Vector2(0.06f, 0.50f), new Vector2(0.48f, 0.60f), CycleSize, 28);
             sizeLabel = sizeBtn.GetComponentInChildren<Text>();
             RefreshSize();
+            var cubeBtn = UIFactory.Button("Cube", c, "", new Color(0.25f, 0.3f, 0.4f), new Vector2(0.52f, 0.50f), new Vector2(0.94f, 0.60f), CycleCube, 28);
+            cubeLabel = cubeBtn.GetComponentInChildren<Text>();
+            RefreshCube();
 
             if (vr)
             {
-                Place(UIFactory.Label("VRPrompt", c, "Press  A  or the trigger to start\nLeft stick ← → changes the maze size", 36, Color.white, TextAnchor.MiddleCenter, FontStyle.Bold), 0.25f, 0.46f);
+                Place(UIFactory.Label("VRPrompt", c, "Press  A  or the trigger to start\nLeft stick ← → maze size   ·   Right stick ← → cube difficulty", 36, Color.white, TextAnchor.MiddleCenter, FontStyle.Bold), 0.25f, 0.46f);
                 Place(UIFactory.Label("Help", c, "In the maze:  left stick walk · right stick turn · B / Y bird's-eye · A show path · X repeat", 24, new Color(0.7f, 0.75f, 0.85f)), 0.04f, 0.2f);
             }
             else
@@ -93,6 +96,18 @@ namespace MazeNav
             RefreshSize();
         }
 
+        void CycleCube()
+        {
+            GameSettings.CubeLevel = (GameSettings.CubeLevel + 1) % GameSettings.CubeLevels.Length;
+            RefreshCube();
+        }
+
+        void RefreshCube()
+        {
+            var (name, moves) = GameSettings.CubeLevels[GameSettings.CubeLevel];
+            cubeLabel.text = $"Exit cube:  {name} ({moves}-move scramble)";
+        }
+
         void RefreshSize() => sizeLabel.text = $"Maze size:  {GameSettings.Size} × {GameSettings.Size}";
 
         void Update()
@@ -102,6 +117,7 @@ namespace MazeNav
             {
                 if (aEdge.Pressed(XRPad.A) | trigEdge.Pressed(XRPad.RightTrigger)) StartGame(RunMode.VR);
                 if (stickEdge.Pressed(Mathf.Abs(XRPad.LeftStick.x) > 0.7f)) CycleSize();
+                if (cubeStickEdge.Pressed(Mathf.Abs(XRPad.RightStick.x) > 0.7f)) CycleCube();
             }
             else if (Keyboard.current != null && Keyboard.current.enterKey.wasPressedThisFrame)
             {

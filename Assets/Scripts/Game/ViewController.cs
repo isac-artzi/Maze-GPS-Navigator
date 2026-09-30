@@ -11,6 +11,8 @@ namespace MazeNav
     public class ViewController : MonoBehaviour
     {
         public bool FirstPerson { get; private set; } = true;
+        /// While true the camera is left alone (e.g. the cube challenge owns it).
+        public bool Suspended;
         public event System.Action<bool> Changed;
 
         MazeGame game;
@@ -60,6 +62,17 @@ namespace MazeNav
             Changed?.Invoke(FirstPerson);
         }
 
+        /// Back to first person immediately (no glide), e.g. after the cube challenge.
+        public void SnapToFirstPerson()
+        {
+            bool changed = !FirstPerson;
+            FirstPerson = true;
+            blend = 1f;
+            if (rig.IsVR) rig.transform.rotation = player.transform.rotation;
+            Apply();
+            if (changed) Changed?.Invoke(true);
+        }
+
         void Apply()
         {
             player.Body.SetFirstPerson(FirstPerson);
@@ -81,6 +94,7 @@ namespace MazeNav
 
         void LateUpdate()
         {
+            if (Suspended) return;
             if (rig.IsVR)
             {
                 if (FirstPerson) PlaceHeadAt(player.transform.position);

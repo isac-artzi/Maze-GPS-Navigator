@@ -25,6 +25,12 @@ namespace MazeNav
                     ["arrived"]          = "You have arrived at the exit. Well done!",
                     ["guidance_on"]      = "Voice guidance on.",
                     ["guidance_off"]     = "Voice guidance off.",
+                    ["cube_intro"]       = "The exit is locked. Solve the cube within two minutes to open it.",
+                    ["cube_one_minute"]  = "One minute left.",
+                    ["cube_thirty"]      = "Thirty seconds left.",
+                    ["cube_ten"]         = "Ten seconds!",
+                    ["cube_solved"]      = "Cube solved! The gate is open.",
+                    ["cube_failed"]      = "Time is up. Back to the start of the maze.",
                 };
                 for (int d = 5; d <= 50; d += 5)
                 {

@@ -37,6 +37,16 @@ namespace MazeNav
             return p;
         }
 
+        /// Move instantly (the CharacterController must be off while we set the transform).
+        public void Teleport(Vector3 position, Quaternion rotation)
+        {
+            cc.enabled = false;
+            transform.SetPositionAndRotation(position, rotation);
+            cc.enabled = true;
+            centeredCell = new Vector2Int(-1, -1);
+            verticalVelocity = 0;
+        }
+
         void Update()
         {
             float dt = Time.deltaTime;

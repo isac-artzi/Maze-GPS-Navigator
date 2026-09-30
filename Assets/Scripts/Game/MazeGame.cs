@@ -22,12 +22,15 @@ namespace MazeNav
         public GpsNavigator Gps { get; private set; }
         public VoiceGuide Voice { get; private set; }
         public bool ShowPath { get; private set; }
+        public CubeChallenge Cube { get; private set; }
         public float Elapsed => (finished ? finishTime : Time.time) - startTime;
 
         Hud hud;
         LineRenderer pathLine;
         bool pathToggle, finished;
         float startTime, finishTime;
+        Quaternion spawnRotation;
+        bool autopilotBeforeCube;
         readonly ButtonEdge aEdge = new ButtonEdge(), bEdge = new ButtonEdge(), yEdge = new ButtonEdge(),
                             xEdge = new ButtonEdge(), menuEdge = new ButtonEdge();
 
@@ -46,7 +49,8 @@ namespace MazeNav
             // Spawn in the start cell, facing along the first leg of the route.
             var first = AStarPathfinder.FindPath(Grid, Grid.Start, Grid.Exit);
             Vector2Int dir = first.Count > 1 ? first[1] - first[0] : Vector2Int.up;
-            Player = PlayerController.Create(this, CellCenter(Grid.Start), Quaternion.LookRotation(new Vector3(dir.x, 0, dir.y)));
+            spawnRotation = Quaternion.LookRotation(new Vector3(dir.x, 0, dir.y));
+            Player = PlayerController.Create(this, CellCenter(Grid.Start), spawnRotation);
             Player.Autopilot = GameSettings.Autopilot;
 
             Rig = CameraRig.Create(vr);
@@ -59,7 +63,12 @@ namespace MazeNav
             Gps = gameObject.AddComponent<GpsNavigator>();
             Gps.Init(this, Voice, Player.transform);
             Gps.PathChanged += _ => RefreshPath();
-            Gps.OnArrived += Finish;
+            Gps.OnArrived += OnReachedExit;
+
+            Cube = gameObject.AddComponent<CubeChallenge>();
+            Cube.Init(this, Rig);
+            Cube.Solved += OnCubeSolved;
+            Cube.Failed += OnCubeFailed;
 
             CreatePathLine();
             UIFactory.EnsureEventSystem();
@@ -69,6 +78,7 @@ namespace MazeNav
             startTime = Time.time;
             Debug.Log($"[MazeNav] Maze {Grid.Width}x{Grid.Height} seed {Seed}, mode {GameSettings.Mode}, shortest route {first.Count - 1} cells.");
             if (!string.IsNullOrEmpty(GameSettings.ScreenshotDir)) StartCoroutine(CaptureTour());
+            if (GameSettings.QuitAfter > 0) StartCoroutine(QuitAfter(GameSettings.QuitAfter));
         }
 
         void SetupLighting()
@@ -119,6 +129,13 @@ namespace MazeNav
             var k = Keyboard.current;
             bool vr = GameSettings.Mode == RunMode.VR;
 
+            if (Cube.Active)   // the cube challenge owns the keys and buttons; only these still work
+            {
+                if (k != null && k.gKey.wasPressedThisFrame) Voice.SetMuted(!Voice.Muted);
+                if ((k != null && k.escapeKey.wasPressedThisFrame) || (vr && menuEdge.Pressed(XRPad.Menu))) SceneManager.LoadScene("Main");
+                return;
+            }
+
             bool toggleView = (k != null && (k.vKey.wasPressedThisFrame || k.tabKey.wasPressedThisFrame));
             bool togglePath = k != null && k.pKey.wasPressedThisFrame;
             bool repeat = k != null && k.rKey.wasPressedThisFrame;
@@ -142,6 +159,57 @@ namespace MazeNav
             if (toMenu) SceneManager.LoadScene("Main");
         }
 
+        // ---- the locked exit: cube challenge --------------------------------------------------
+        void OnReachedExit()
+        {
+            autopilotBeforeCube = Player.Autopilot;
+            Player.InputEnabled = false;
+            Player.Autopilot = false;
+            if (!View.FirstPerson) View.SnapToFirstPerson();
+            View.Suspended = true;
+            hud.SetPuzzleMode(true);
+            RefreshPath();
+            Cube.Begin(autopilotBeforeCube);
+            if (!string.IsNullOrEmpty(GameSettings.ScreenshotDir)) StartCoroutine(ShotLater($"5-cube-attempt{Cube.Attempts}.png", 4f));
+        }
+
+        void LeaveCubeStage()
+        {
+            View.Suspended = false;
+            View.SnapToFirstPerson();
+            hud.SetPuzzleMode(false);
+        }
+
+        void OnCubeSolved()
+        {
+            LeaveCubeStage();
+            Finish();
+        }
+
+        void OnCubeFailed()
+        {
+            // Back to square one: same maze, fresh route, the clock keeps running.
+            Player.Teleport(CellCenter(Grid.Start), spawnRotation);
+            Gps.ResetRoute();
+            LeaveCubeStage();
+            Player.InputEnabled = true;
+            Player.Autopilot = autopilotBeforeCube;
+            RefreshPath();
+        }
+
+        IEnumerator ShotLater(string file, float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            Shot(file);
+        }
+
+        IEnumerator QuitAfter(float seconds)
+        {
+            yield return new WaitForSeconds(seconds);
+            Debug.Log("[MazeNav] -quitAfter reached, quitting.");
+            Application.Quit();
+        }
+
         void Finish()
         {
             finished = true;
@@ -149,7 +217,7 @@ namespace MazeNav
             Player.InputEnabled = false;
             Player.Autopilot = false;
             RefreshPath();
-            hud.ShowFinish(Elapsed, Gps.Recalculations);
+            hud.ShowFinish(Elapsed, Gps.Recalculations, Cube.Attempts, Cube.SolveSeconds);
             Debug.Log($"[MazeNav] ARRIVED in {Elapsed:F1}s with {Gps.Recalculations} recalculations.");
             if (GameSettings.QuitOnArrive) StartCoroutine(QuitSoon());
         }

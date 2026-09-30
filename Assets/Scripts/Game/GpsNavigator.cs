@@ -38,6 +38,16 @@ namespace MazeNav
             game = g; voice = v; player = p;
         }
 
+        /// Forget the current route (after a teleport); the next frame plans a fresh one.
+        public void ResetRoute()
+        {
+            Path = null;
+            Arrived = false;
+            lastCell = farAnnounced = nowAnnounced = None;
+            exitAnnounced = false;
+            pendingHeading = Maneuver.Straight;
+        }
+
         void Update()
         {
             if (Arrived || player == null) return;
