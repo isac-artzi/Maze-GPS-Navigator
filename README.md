@@ -4,8 +4,11 @@
 
 This is a demo activity. You walk a humanoid character through a procedurally generated maze. An **A\* pathfinder** plans the route to the exit, and a **car-GPS style voice** guides you there: *"In 10 meters, turn left."* … *"Turn left."* … *"Recalculating."* Press one key to go from the first-person view to a bird's-eye view. The same project runs on the desktop and on a **Meta Quest 3**.
 
+**The twist:** the exit is locked. When you reach it you must solve a **2×2×2 Rubik's cube in 2 minutes**. If the time runs out, you're sent back to the start of the maze to walk it again.
+
 ![First person](Docs/1-first-person.png)
 ![Bird's-eye](Docs/3-birds-eye.png)
+![Exit cube challenge](Docs/5-cube-challenge.png)
 
 ---
 
@@ -30,6 +33,19 @@ The voice clips are already in `Assets/Resources/Voice`. To use a different voic
 | Autopilot (the GPS drives) | T | — |
 | New maze (after you finish) | Enter | A |
 | Back to the start screen | Esc | Menu button |
+
+### The exit cube (2×2×2, 2-minute limit)
+
+| Action | Desktop | Quest 3 |
+|---|---|---|
+| Turn a face clockwise | U D L R F B keys, or the on-screen buttons | Right stick ← → picks a face (it lights up), **A** turns it |
+| Turn a face counter-clockwise (') | **Shift** + key, or the ' buttons | **B** |
+| Look around the cube | Arrow keys, or drag with the mouse | Left stick |
+| Auto-solve (demo) | T | (autopilot only) |
+
+Letters float next to the faces you can see. *Clockwise* always means clockwise as you look straight at that face.
+
+Pick the difficulty on the start screen: **Easy** is a 3-move scramble, **Medium** 5 and **Hard** 9. In VR, use the right stick. Voice cues at 1:00, 0:30 and 0:10.
 
 ## 3. Desktop or Quest?
 
@@ -59,6 +75,7 @@ Assets/Scripts/Core/            ← pure C#, unit-tested, no scene needed
   MazeGenerator.cs              recursive backtracker + "braiding" (loops)
   AStarPathfinder.cs            A* with a Manhattan heuristic
   RoutePlanner.cs               path → next maneuver (left/right/straight/U-turn) + distance
+  Cube2Model.cs                 2×2×2 cube logic: integer rotations, scramble, solved check
 Assets/Scripts/Game/
   MainMenu.cs                   start screen, desktop/Quest choice
   MazeGame.cs                   builds the level, handles keys/buttons
@@ -69,6 +86,8 @@ Assets/Scripts/Game/
   GpsNavigator.cs               re-plans on every cell change, decides what to say
   VoiceGuide.cs                 plays clips, anti-nag timer, subtitles
   VoicePhrases.cs               every sentence the GPS can say (single source of truth)
+  CubeView.cs                   8 cubies + stickers, animated face turns, face labels
+  CubeChallenge.cs              puzzle stage, 2-minute clock, controls, win → finish, lose → back to start
   CameraRig.cs, XRSupport.cs    desktop camera / XR rig, OpenXR start-stop, Touch controllers
   Hud.cs, UIFactory.cs          GPS panel, subtitles, finish panel (uGUI built in code)
 Assets/Editor/
@@ -102,7 +121,23 @@ Each turn is announced twice: once from a distance, rounded to 5 m (*"In 10 mete
 
 Each time you enter a new cell, A\* runs again from that cell. If the new cell isn't the one the old route expected, you hear *"Recalculating."*
 
-### 4.4 Two platforms, one project
+### 4.4 The cube: 8 cubies and integer rotations
+
+A 2×2×2 cube has no centre pieces, only 8 corner **cubies**. Each cubie stores its corner position **p** (every coordinate is ±1) and where its local x, y and z axes point now. All of these are integer vectors.
+
+A face turn picks the 4 cubies with **p · n > 0**, where **n** is the face's outward normal. It rotates their position and their axes by 90°:
+
+  **v′ = n (n·v) ± n × v**
+
+This is Rodrigues' formula with cos 90° = 0 and sin 90° = ±1. The arithmetic is all integers, so the cube never drifts out of alignment.
+
+A sticker's colour is the colour of the face it pointed at when the cube was solved. The cube is **solved** when each face shows one colour. The test compares the 4 stickers on each face, so a cube that is solved but turned as a whole still counts.
+
+Scrambles use only R, U and F, like official 2×2 scrambles. On a 2×2, L is the same as R′ followed by turning the whole cube. Mixing opposite faces could produce "fake" scrambles like L R′, which is just the solved cube rotated.
+
+The animation parents the 4 cubies to a pivot and rotates it. When the turn ends, every cubie snaps to the exact position the model computed.
+
+### 4.5 Two platforms, one project
 
 - **XR Plug-in Management + OpenXR.** Android: *Initialize XR on Startup* is on, with the Meta Quest feature and the Oculus Touch profile. Desktop: XR stays off until the player chooses VR.
 - **The camera rig** is a plain `Camera` on the desktop. In VR it is `XR Rig › Camera Offset › Camera` with an Input System `TrackedPoseDriver`.
@@ -117,7 +152,9 @@ $UNITY -batchmode -quit -projectPath . -executeMethod MazeNav.EditorTools.MazePr
 $UNITY -batchmode -quit -projectPath . -buildTarget Android -executeMethod MazeNav.EditorTools.MazeProjectSetup.BuildQuestCLI
 ```
 
-The built game also accepts these arguments for smoke tests: `-autostart -autopilot -quitOnArrive -seed 42 -size 10 -screenshots <folder>`. With them, the game skips the menu, lets the GPS drive, saves screenshots, and quits once it reaches the exit.
+The built game also accepts these arguments for smoke tests: `-autostart -autopilot -quitOnArrive -seed 42 -size 10 -screenshots <folder>`. With them, the game skips the menu, lets the GPS drive, saves screenshots, and quits once it reaches the exit. With autopilot on, the cube solves itself by undoing every move.
+
+To test the failure path, add `-cubeGiveUp -cubeTime 8 -quitAfter 60`. The autopilot then leaves the cube alone, the 8-second clock runs out, and the player is sent back to the start. `-scramble N` sets the scramble length.
 
 ## 6. Deliverables (activity)
 
@@ -131,3 +168,5 @@ The built game also accepts these arguments for smoke tests: `-autostart -autopi
 3. Swap `BlockyHumanoid` for a rigged Mixamo character with an Animator.
 4. Add a compass rose to the HUD, or spatial audio: put the voice at the next turn instead of in your ear.
 5. Compare Dijkstra, greedy best-first and A\*. Draw each one's visited cells in bird's-eye view.
+6. Replace the "undo everything" auto-solve with a real solver: breadth-first search over R, U and F from the scrambled state. Every 2×2 position can be solved in at most 11 quarter turns.
+7. Show a hint (the next move of the optimal solution) in exchange for 15 seconds off the clock.
